@@ -1,5 +1,5 @@
 import os
-from threading import Thread
+from threading import Thread, Event
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -25,24 +25,29 @@ class ApiHandler:
             return jsonify({"error": "Missing form data"}), 400
 
         # Start a thread to run our handler on its own
+        saveEvent = Event()
         thread = Thread(target=self.process_uploaded_files, 
                         args=(request.form.get("username"), 
                               request.form.get("tag"), 
-                              request.files.getlist("files[]"))
+                              request.files.getlist("files[]"),
+                              saveEvent)
                         )
         thread.start()
+        saveEvent.wait()
+
 
         # Return immediately so other Users can send an Upload Request
         return jsonify({'message': 'Data received'}), 201
     
 
-    def process_uploaded_files(self, username, tag, files):
+    def process_uploaded_files(self, username, tag, files, saveEvent):
         print("Files: ", files)
         print("Username: ", username)
         print("Tag: ", tag)
 
         print("Saving files...")
         save_files(username, self.app.config["UPLOAD_FOLDER"], files)
+        saveEvent.set()
 
         print("Chunking files...")
         # fn here
