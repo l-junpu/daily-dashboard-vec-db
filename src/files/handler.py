@@ -1,4 +1,5 @@
 import os
+import shutil
 from werkzeug.utils import secure_filename
 
 def create_upload_directory(username, uploadDir):
@@ -27,3 +28,12 @@ def save_files(username, uploadDir, files):
         else:
             filename = secure_filename(file.filename)
             file.save(os.path.join(uploadDir, username, filename))
+
+def shift_file(username, filename, oldDirectory, newDirectory):
+    # Create a new directory if it doesn't exist yet,
+    # and shift the files over
+    oldDirectory = os.path.join(oldDirectory, username)
+    newDirectory = os.path.join(newDirectory, username)
+    os.makedirs(newDirectory, exist_ok=True)
+    shutil.move(os.path.join(oldDirectory, filename),
+                os.path.join(newDirectory))

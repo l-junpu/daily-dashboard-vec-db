@@ -1,27 +1,64 @@
-# import chromadb
-# chroma_client = chromadb.HttpClient(host='localhost', port=8000)
+import os
+import nltk
+import chromadb
+from typing import List
+from src.llm.chunker import Chunker
+from src.llm.embedding_func import CustomSentenceTransformerEmbeddingFunction
 
-# # switch `create_collection` to `get_or_create_collection` to avoid creating a new collection every time
-# collection = chroma_client.get_or_create_collection(name="my_collection")
+class ChromaDBHandler:
+    def __init__(self, host, port, collectionName):
+        self.client = chromadb.HttpClient(host=host, port=port)
+        self.chunker = Chunker(80)
 
-# # switch `add` to `upsert` to avoid adding the same documents every time
-# collection.upsert(
-#     documents=[
-#         "This is a document about pineapple",
-#         "This is a document about nuggets",
-#         "This is a document about oranges"
-#     ],
-#     metadatas=[{"source": "me", "tag": "vrforce"}, {"source": "me", "tag": "vrforce"}, {"source": "me", "tag": "vrlink"}],
-#     ids=["id1", "id2", "id3"]
-# )
+        self.custom_ef = CustomSentenceTransformerEmbeddingFunction( self.GetModelDirectory() )
+        self.collection = self.client.get_or_create_collection(name=collectionName, embedding_function=self.custom_ef)
+    
 
-# # Test deletion of tagged documents only
-# #collection.delete(where={"tag": {"$eq": "vrforce"}})
+    def EmbedDocument(self, requester: str, tag: str, directory: str):
+        chunks = self.chunker.ChunkDocument(directory, tag)
+        if len(chunks) == 0: return False
+        self.collection.upsert(documents=[chunk.contents for chunk in chunks],
+                                ids=[chunk.uid for chunk in chunks],
+                                metadatas=[{'source': c.source, 'tag': c.tag, 'requester': requester} for c in chunks])
+        return True
+        # full_collection = self.collection.get()
+        # for i in range(len(full_collection['ids'])):
+        #     print(f"ID: {full_collection['ids'][i]}")
+        #     print(f"Metadata: {full_collection['metadatas'][i]}")
+        #     print(f"Documents: {full_collection['documents'][i]}")
+        #     print("\n")
 
-# results = collection.query(
-#     query_texts=["This is a query document about florida"], # Chroma will embed this for you
-#     n_results=2, # how many results to return
-#     where={"tag": {"$eq": "vrforce"}}
-# )
 
-# print(results)
+    def QueryPrompt(self, prompt: str, neighbours: int, tags: List[str]):
+        results = self.collection.query(query_texts=[prompt],
+                                        n_results=neighbours,
+                                        where={"tag": {"$in": [tag for tag in tags]}})
+        return results
+
+
+    def UpdateTag(self, previousTag: str, newTag: str):
+        pass
+
+
+    def DeleteTag(self, tag: str):
+        pass
+
+
+    def DeleteDocument(self, document: str):
+        pass
+
+
+    # Our models path is located in src/models/
+    def GetModelDirectory(self):
+        current_path = os.path.abspath(__file__)
+        current_path = os.path.dirname(current_path)
+        model_directory = os.path.join(current_path, '../all-mpnet-base-v2/')
+        return model_directory
+    
+
+
+# client = chromadb.HttpClient(host='localhost', port=8000)
+# client.delete_collection("vectordb")
+# collection = client.get_or_create_collection(name="vectordb")
+
+# print(collection.get())

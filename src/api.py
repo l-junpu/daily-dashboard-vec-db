@@ -5,7 +5,8 @@ from flask import Flask, jsonify, request
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 
-from src.files.handler import save_files
+from src.llm.embedder import ChromaDBHandler
+from src.files.handler import save_files, shift_file
 
 class ApiHandler:
     def __init__(self, name, rootDir):
@@ -13,6 +14,8 @@ class ApiHandler:
         self.app = Flask(name)
         self.app.config["UPLOAD_FOLDER"] = os.path.join(rootDir, "uploads", "users")
         self.app.config["EMBEDDED_FOLDER"] = os.path.join(rootDir, "uploads", "embedded-documents")
+        self.app.config["UNHANDLED_FOLDER"] = os.path.join(rootDir, "uploads", "unhandled-documents")
+        self.chromadb = ChromaDBHandler(host="localhost", port=8000, collectionName="vectordb")
         self.user_sid = defaultdict(str)
         self.last_status = defaultdict(str)
         
@@ -44,7 +47,6 @@ class ApiHandler:
         thread.start()
         saveEvent.wait()
 
-
         # Return immediately so other Users can send an Upload Request
         return jsonify({'message': 'Data received'}), 201
     
@@ -56,15 +58,18 @@ class ApiHandler:
         self.emit_status_update(username, "Files have been successfully saved...")
         saveEvent.set()
 
-        # Chunk each file individually
-        # We might want to chunk -> embed -> chunk -> embed
-        self.emit_status_update(username, "Chunking files...")
-        # fn here
-        # after each file has been chunked i want to write back to the frontend to say x/1000 files have been chunked
-
-        self.emit_status_update(username, "Embedding files...")
-        # fn here
-        # after each file has been embedded i want to write back to the frontend to say x/1000 files have been embedded
+        # Process each file
+        uploadPath = os.path.join(self.app.config["UPLOAD_FOLDER"], username)
+        savedFiles = os.listdir(uploadPath)
+        for i, file in enumerate(savedFiles):
+            self.emit_status_update(username, f"Processing file {i}/{len(savedFiles)}: {file}")
+            success = self.chromadb.EmbedDocument(username, tag, os.path.join(uploadPath, file))
+            if success:
+                shift_file(username, file, self.app.config["UPLOAD_FOLDER"], self.app.config["EMBEDDED_FOLDER"])
+            else:
+                shift_file(username, file, self.app.config["UPLOAD_FOLDER"], self.app.config["UNHANDLED_FOLDER"])
+            
+        self.emit_status_update(username, "Completed processing")
 
     
     def handle_connect(self, auth):
