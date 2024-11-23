@@ -29,11 +29,19 @@ def save_files(username, uploadDir, files):
             filename = secure_filename(file.filename)
             file.save(os.path.join(uploadDir, username, filename))
 
+
 def shift_file(username, filename, oldDirectory, newDirectory):
     # Create a new directory if it doesn't exist yet,
     # and shift the files over
     oldDirectory = os.path.join(oldDirectory, username)
     newDirectory = os.path.join(newDirectory, username)
     os.makedirs(newDirectory, exist_ok=True)
+    
+    # Remove old file with same name if exists
+    newDirectoryFile = os.path.join(newDirectory, filename)
+    if os.path.exists(newDirectoryFile):
+        os.remove(newDirectoryFile)
+
+    # Move the file over
     shutil.move(os.path.join(oldDirectory, filename),
-                os.path.join(newDirectory))
+                newDirectory)
