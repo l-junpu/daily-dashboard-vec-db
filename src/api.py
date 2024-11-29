@@ -3,9 +3,9 @@ import os
 from threading import Thread, Event
 from flask import Flask, jsonify, request
 from flask_socketio import SocketIO, emit
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 
-from src.llm.embedder import ChromaDBHandler
+from src.llm.chromadb_handler import ChromaDBHandler
 from src.files.handler import save_files, shift_file
 
 class ApiHandler:
@@ -20,10 +20,11 @@ class ApiHandler:
         self.last_status = defaultdict(str)
         
         # Enable CORS
-        CORS(self.app)
+        CORS(self.app, origins=["http://localhost:5173"])
 
         # Register API Requests
         self.app.add_url_rule("/database/api/upload-files/", methods=["POST"], view_func=self.receive_uploaded_files)
+        self.app.add_url_rule("/database/api/retrieve-tags-and-docs/", methods=["GET"], view_func=self.retrieve_tags_and_docs)
 
         # Set up Socket Io
         self.socketio = SocketIO(self.app, cors_allowed_origins='*')
@@ -48,7 +49,7 @@ class ApiHandler:
         saveEvent.wait()
 
         # Return immediately so other Users can send an Upload Request
-        return jsonify({'message': 'Data received'}), 201
+        return jsonify({'message': 'Data received'}), 200
     
 
     def process_uploaded_files(self, username, tag, files, saveEvent):
@@ -70,6 +71,11 @@ class ApiHandler:
                 shift_file(username, file, self.app.config["UPLOAD_FOLDER"], self.app.config["UNHANDLED_FOLDER"])
             
         self.emit_status_update(username, "Completed processing")
+
+
+    def retrieve_tags_and_docs(self):
+        tags, docs = self.chromadb.retrieve_tags_and_docs()
+        return jsonify({ 'tags': list(tags), 'docs': list(docs) }), 200
 
     
     def handle_connect(self, auth):

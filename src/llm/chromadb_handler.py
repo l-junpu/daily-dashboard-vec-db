@@ -21,6 +21,17 @@ class ChromaDBHandler:
                                 ids=[chunk.uid for chunk in chunks],
                                 metadatas=[{'source': c.source, 'tag': c.tag, 'requester': requester} for c in chunks])
         return True
+    
+    def retrieve_tags_and_docs(self):
+        metadata = self.collection.get()["metadatas"];
+
+        docs = set()
+        tags = set()
+        for d in metadata:
+            docs.add(d["source"])
+            tags.add(d["tag"])
+        
+        return tags, docs
 
 
     def UpdateTag(self, previousTag: str, newTag: str):
@@ -41,3 +52,8 @@ class ChromaDBHandler:
         current_path = os.path.dirname(current_path)
         model_directory = os.path.join(current_path, '../all-mpnet-base-v2/')
         return model_directory
+    
+
+# if __name__ == "__main__":
+#     chromadb = ChromaDBHandler(host="localhost", port=8000, collectionName="vectordb")
+#     chromadb.retrieve_tags_and_docs()
