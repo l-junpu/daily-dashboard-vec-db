@@ -25,11 +25,11 @@ class ChromaDBHandler:
     def retrieve_tags_and_docs(self):
         metadata = self.collection.get()["metadatas"];
 
-        docs = set()
-        tags = set()
+        docs = []
+        tags = []
         for d in metadata:
-            docs.add(d["source"])
-            tags.add(d["tag"])
+            if d["tag"] not in tags: tags.append(d["tag"])
+            if d["source"] not in docs: docs.append(d["source"])
         
         return tags, docs
 

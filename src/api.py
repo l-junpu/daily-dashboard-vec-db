@@ -16,8 +16,10 @@ class ApiHandler:
         self.app.config["EMBEDDED_FOLDER"] = os.path.join(rootDir, "uploads", "embedded-documents")
         self.app.config["UNHANDLED_FOLDER"] = os.path.join(rootDir, "uploads", "unhandled-documents")
         self.chromadb = ChromaDBHandler(host="localhost", port=8000, collectionName="vectordb")
+
         self.user_sid = defaultdict(str)
         self.last_status = defaultdict(str)
+        self.tags, self.docs = self.chromadb.retrieve_tags_and_docs()
         
         # Enable CORS
         CORS(self.app, origins=["http://localhost:5173"])
@@ -67,6 +69,8 @@ class ApiHandler:
             success = self.chromadb.EmbedDocument(username, tag, os.path.join(uploadPath, file))
             if success:
                 shift_file(username, file, self.app.config["UPLOAD_FOLDER"], self.app.config["EMBEDDED_FOLDER"])
+                if tag not in self.tags: self.tags.add(tag)
+                if file not in self.docs: self.docs.add(file)
             else:
                 shift_file(username, file, self.app.config["UPLOAD_FOLDER"], self.app.config["UNHANDLED_FOLDER"])
             
@@ -74,8 +78,7 @@ class ApiHandler:
 
 
     def retrieve_tags_and_docs(self):
-        tags, docs = self.chromadb.retrieve_tags_and_docs()
-        return jsonify({ 'tags': list(tags), 'docs': list(docs) }), 200
+        return jsonify({ 'tags': self.tags, 'docs': self.docs }), 200
 
     
     def handle_connect(self, auth):
@@ -85,7 +88,7 @@ class ApiHandler:
         # Tie our <username : sid>
         username = auth['username']
         self.user_sid[username] = request.sid
-        emit('connected', {'status': 'Connected'}, room=request.sid)
+        emit('connected', {'status': self.last_status[username]}, room=request.sid)
 
 
     def handle_disconnect(self):
@@ -98,6 +101,7 @@ class ApiHandler:
 
     def emit_status_update(self, username, message):
         self.socketio.emit('status_update', {'status': message}, room=self.user_sid[username])
+        self.last_status[username] = message
     
 
     def run(self):
