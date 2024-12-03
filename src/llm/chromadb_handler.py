@@ -27,11 +27,51 @@ class ChromaDBHandler:
 
         docs = []
         tags = []
+        user = []
         for d in metadata:
             if d["tag"] not in tags: tags.append(d["tag"])
             if d["source"] not in docs: docs.append(d["source"])
+            if d["requester"] not in user: user.append(d["requester"])
         
-        return tags, docs
+        return tags, docs, user
+
+    
+    def Filter(self, tags: list[str], users: list[str], page: int, rows: int):
+        # Apply our filter based on tags / users
+        filter = {}
+        if len(tags) > 0 and len(users) > 0:
+            filter = {
+                "$and": [
+                    {"tag": {"$in": tags}},
+                    {"requester": {"$in": users}}
+                ]
+            }
+        elif len(tags) > 0:
+            filter = {"tag": {"$in": tags}}
+        elif len(users) > 0:
+            filter = {"requester": {"$in": users}}
+
+        print(filter)
+
+        # If there is a valid filter, apply it
+        metadatas = []
+        if filter != {}:
+            metadatas = self.collection.get(limit=None, where=filter)["metadatas"]
+        # Else we just query all
+        else:
+            metadatas = self.collection.get(limit=None)["metadatas"]
+        
+        # Retrieve all unique document names
+        sources = []
+        for md in metadatas:
+            if not any(source["source"] == md["source"] for source in sources):
+                sources.append({ "source": md["source"],
+                                 "tag": md["tag"],
+                                 "user": md["requester"],
+                                 "date": "TBD" })
+
+        # Filter "row" elements per page, and also returns the max number of pages for this filter
+        return sources[page*rows : (page+1)*rows], len(sources) // rows
 
 
     def UpdateTag(self, previousTag: str, newTag: str):
@@ -54,6 +94,7 @@ class ChromaDBHandler:
         return model_directory
     
 
-# if __name__ == "__main__":
-#     chromadb = ChromaDBHandler(host="localhost", port=8000, collectionName="vectordb")
-#     chromadb.retrieve_tags_and_docs()
+if __name__ == "__main__":
+    chromadb = ChromaDBHandler(host="localhost", port=8000, collectionName="vectordb")
+    f = chromadb.Filter([], [], 0, 10)
+    print(f)

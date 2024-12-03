@@ -19,13 +19,14 @@ class ApiHandler:
 
         self.user_sid = defaultdict(str)
         self.last_status = defaultdict(str)
-        self.tags, self.docs = self.chromadb.retrieve_tags_and_docs()
+        self.tags, self.docs, self.users = self.chromadb.retrieve_tags_and_docs()
         
         # Enable CORS
         CORS(self.app, origins=["http://localhost:5173"])
 
         # Register API Requests
         self.app.add_url_rule("/database/api/upload-files/", methods=["POST"], view_func=self.receive_uploaded_files)
+        self.app.add_url_rule("/database/api/retrieve-relevant-docs/", methods=["POST"], view_func=self.retrieve_filtered_docs)
         self.app.add_url_rule("/database/api/retrieve-tags-and-docs/", methods=["GET"], view_func=self.retrieve_tags_and_docs)
 
         # Set up Socket Io
@@ -61,6 +62,9 @@ class ApiHandler:
         self.emit_status_update(username, "Files have been successfully saved...")
         saveEvent.set()
 
+        # Update username list if its a new uploader
+        if username not in self.users: self.users.append(username)
+
         # Process each file
         uploadPath = os.path.join(self.app.config["UPLOAD_FOLDER"], username)
         savedFiles = os.listdir(uploadPath)
@@ -69,16 +73,22 @@ class ApiHandler:
             success = self.chromadb.EmbedDocument(username, tag, os.path.join(uploadPath, file))
             if success:
                 shift_file(username, file, self.app.config["UPLOAD_FOLDER"], self.app.config["EMBEDDED_FOLDER"])
-                if tag not in self.tags: self.tags.add(tag)
-                if file not in self.docs: self.docs.add(file)
+                if tag not in self.tags: self.tags.append(tag)
+                if file not in self.docs: self.docs.append(file)
             else:
                 shift_file(username, file, self.app.config["UPLOAD_FOLDER"], self.app.config["UNHANDLED_FOLDER"])
             
         self.emit_status_update(username, "Completed processing")
 
 
+    def retrieve_filtered_docs(self):
+        req = request.get_json()
+        sources, maxPages = self.chromadb.Filter(req['tags'], req['users'], req['page'], req['rows'])
+        return jsonify({ 'sources': sources, 'maxPages': maxPages }), 200
+
+
     def retrieve_tags_and_docs(self):
-        return jsonify({ 'tags': self.tags, 'docs': self.docs }), 200
+        return jsonify({ 'tags': self.tags, 'docs': self.docs, 'users': self.users }), 200
 
     
     def handle_connect(self, auth):
