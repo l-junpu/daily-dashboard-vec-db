@@ -78,12 +78,12 @@ class ChromaDBHandler:
         pass
 
 
-    def DeleteTag(self, tag: str):
-        pass
+    def DeleteTags(self, tags: list[str]):
+        self.collection.delete(where={"tag": {"$in": tags}})
 
 
-    def DeleteDocument(self, document: str):
-        pass
+    def DeleteDocument(self, documentSource: str):
+        self.collection.delete(where={"source": {"$eq": documentSource}})
 
 
     # Our models path is located in src/models/

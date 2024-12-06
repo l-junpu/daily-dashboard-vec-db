@@ -1,7 +1,7 @@
 from collections import defaultdict
 import os
 from threading import Thread, Event
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS, cross_origin
 
@@ -25,6 +25,8 @@ class ApiHandler:
         CORS(self.app, origins=["http://localhost:5173"])
 
         # Register API Requests
+        self.app.add_url_rule("/database/api/delete-doc/", methods=["POST"], view_func=self.delete_doc)
+        self.app.add_url_rule("/database/api/delete-tags/", methods=["POST"], view_func=self.delete_tags)
         self.app.add_url_rule("/database/api/upload-files/", methods=["POST"], view_func=self.receive_uploaded_files)
         self.app.add_url_rule("/database/api/retrieve-relevant-docs/", methods=["POST"], view_func=self.retrieve_filtered_docs)
         self.app.add_url_rule("/database/api/retrieve-tags-and-docs/", methods=["GET"], view_func=self.retrieve_tags_and_docs)
@@ -54,6 +56,23 @@ class ApiHandler:
         # Return immediately so other Users can send an Upload Request
         return jsonify({'message': 'Data received'}), 200
     
+
+    def delete_doc(self):
+        req = request.get_json()
+        self.chromadb.DeleteDocument(req["document"])
+        # Update our cache
+        self.tags, self.docs, self.users = self.chromadb.retrieve_tags_and_docs()
+        return Response(status=200)
+
+
+    def delete_tags(self):
+        req = request.get_json()
+        self.chromadb.DeleteTags(req["tags"])
+        # Update our cache
+        self.tags, self.docs, self.users = self.chromadb.retrieve_tags_and_docs()
+
+        return Response(status=200)
+
 
     def process_uploaded_files(self, username, tag, files, saveEvent):
         # Save files locally

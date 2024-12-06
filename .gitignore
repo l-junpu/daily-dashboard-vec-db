@@ -163,7 +163,6 @@ cython_debug/
 
 
 # Others
+venv
 uploads
 src/all-mpnet-base-v2
-dashboard-venv
-vectordb-venv
